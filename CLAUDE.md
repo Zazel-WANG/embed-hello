@@ -9,11 +9,7 @@
 
 ## 用户背景
 
-王仲琦，2027届应届生。HIT 通信工程本科 + 港理工电子信息工程硕士。
-嵌入式方向：C/C++、FreeRTOS、STM32、Linux Kernel。
-当前在麒麟软件实习，负责卫星嵌入式 OS 的 CI/CD 平台搭建。
-拥有鲁班猫 RK3588 + 屏幕 + 摄像头，用于个人嵌入式 AI 项目。
-目标：先为鲁班猫搭建 CI/CD，后迁移到卫星 OS 场景。CI/CD 经验同时用于秋招。
+详见全局 Skill `user-profile`（SessionStart hook 自动加载）。
 
 ## 项目概述
 
@@ -32,6 +28,8 @@
 - 主机：Ubuntu Server 22.04（Docker + Gitea + Jenkins）— 10.0.0.1
 
 ## 🛡️ 安全规则（最高优先级，不可覆盖）
+
+> 这些规则通过 SessionStart hook 自动注入，此处再次强调。
 
 1. **NOT-FOUND 熔断** — 工具返回 NOT FOUND → 停手确认
 2. **观测矛盾停手** — 两个以上观测通道矛盾 → 停手复核
@@ -72,6 +70,11 @@ embed-hello/
 ## 会话恢复
 
 SessionStart hook 自动读取 `.hot/recovery.md`。关闭时 Stop hook 自动覆写。
+
+## 冷记忆（COLD）
+
+遇到终结性结论（事故根因、架构决策、可迁移原则）时，AI 提议、用户审批后写入 `E:\AI-helper\memory\COLD\`。
+文件名格式：`{YYYY-MM-DD}--{项目名}--{标题}.md`
 
 ## 关键配置速查
 

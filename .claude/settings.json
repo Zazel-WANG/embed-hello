@@ -37,7 +37,7 @@
     "PreToolUse": [
       {
         "matcher": "Write|Edit",
-        "if": "Write(**/SKILL.md) | Edit(**/SKILL.md)",
+        "if": "Write(**/SKILL.md) | Edit(**/SKILL.md) | Write(**/GLOBAL_RULES.md) | Edit(**/GLOBAL_RULES.md)",
         "hooks": [
           {
             "type": "command",
