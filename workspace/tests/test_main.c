@@ -2,14 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#if defined(__aarch64__)
-const char* hello_arch(void) { return "aarch64 (ARM64)"; }
-#elif defined(__x86_64__)
-const char* hello_arch(void) { return "x86_64"; }
-#else
-const char* hello_arch(void) { return "unknown"; }
-#endif
-
 static int test_arch_detection(void) {
     const char* arch = hello_arch();
     if (strlen(arch) == 0) return 0;
