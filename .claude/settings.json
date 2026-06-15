@@ -1,0 +1,62 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 E:/AI-helper/.claude/session_init.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 E:/AI-helper/.claude/ps1_skill_index.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 E:/AI-helper/.claude/hot_generator.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "if": "Write(**/SKILL.md) | Edit(**/SKILL.md)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 E:/AI-helper/.claude/write_guard.py",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "if": "Bash(rm *) | Bash(git push *) | Bash(git commit --amend *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 E:/AI-helper/.claude/write_guard.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
