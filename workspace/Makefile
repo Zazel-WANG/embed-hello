@@ -59,5 +59,11 @@ ai-demo: $(AI_SRC_DIR)/rknn_query_demo.c
 	@echo "=== Built for RK3588 native ==="
 	@file $(BUILD_DIR)/$@
 
+ai-infer: $(AI_SRC_DIR)/rknn_infer_demo.c
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(RKNN_CFLAGS) -I$(AI_INC_DIR) $< -o $(BUILD_DIR)/$@ $(RKNN_LIBS) -lm
+	@echo "=== Built for RK3588 native ==="
+	@file $(BUILD_DIR)/$@
+
 ai-clean:
-	rm -f $(BUILD_DIR)/ai-demo
+	rm -f $(BUILD_DIR)/ai-demo $(BUILD_DIR)/ai-infer
