@@ -48,7 +48,7 @@ pipeline {
                 { echo "SUCCESS"; echo "-"; git log -1 --format=%s; } | base64 -w0 > /tmp/build-msg.b64
                 ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell -Command \"New-Item -ItemType Directory -Force -Path E:/AI-helper/projects/embed-hello/workspace/build\""
                 scp -o StrictHostKeyChecking=no /tmp/build-msg.b64 HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/build-status.txt
-                ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\cicd\\workspace\\deploy\\notify-build.ps1"
+                ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\embed-hello\\workspace\\deploy\\notify-build.ps1"
             '''
             withCredentials([string(credentialsId: 'gitea-api-token', variable: 'GITEA_TOKEN')]) {
                 sh """
@@ -64,7 +64,7 @@ pipeline {
                 { echo "FAILED"; cat /tmp/current-stage.txt; git log -1 --format=%s; } | base64 -w0 > /tmp/build-msg.b64
                 ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell -Command \"New-Item -ItemType Directory -Force -Path E:/AI-helper/projects/embed-hello/workspace/build\""
                 scp -o StrictHostKeyChecking=no /tmp/build-msg.b64 HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/build-status.txt
-                ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\cicd\\workspace\\deploy\\notify-build.ps1"
+                ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\embed-hello\\workspace\\deploy\\notify-build.ps1"
             '''
             withCredentials([string(credentialsId: 'gitea-api-token', variable: 'GITEA_TOKEN')]) {
                 sh """
