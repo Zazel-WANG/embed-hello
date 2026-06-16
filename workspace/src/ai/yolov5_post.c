@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <rknn_api.h>
 
 /* ── 配置 ── */
 #define MAX_CANDIDATES 300
@@ -72,48 +73,50 @@ static void dequant_int8(const int8_t *src, float *dst, int n, int zp, float sca
 
 /*
  * yolov5_decode: 解码一层输出 → 生成候选框
- *   data:   dequant float buffer [3*85 * grid_h * grid_w]
+ *   data:   dequant float buffer (NCHW, [255, grid_h, grid_w])
  *   stride: 该层的 stride
  *   dets:   输出 Detection 数组 (append)
  *   count:  当前 dets 数量 (in/out)
+ *
+ * NCHW 内存布局: offset = c * H * W + h * W + w
+ *   255 通道 = 3 anchor × 85 (tx,ty,tw,th,conf,80cls)
+ *
+ * Box 解码公式 (YOLOv5):
+ *   cx = (sigmoid(tx)*2 - 0.5 + gx) * stride
+ *   cy = (sigmoid(ty)*2 - 0.5 + gy) * stride
+ *   bw = (sigmoid(tw)*2)^2 * anchor_w
+ *   bh = (sigmoid(th)*2)^2 * anchor_h
  */
 static void yolov5_decode(const float *data, int stride, int grid_w, int grid_h,
                           int layer_idx, Detection *dets, int *count) {
     int ai = layer_idx;
+    int plane = grid_h * grid_w;  /* 一层的像素数 */
 
     for (int gy = 0; gy < grid_h; gy++) {
         for (int gx = 0; gx < grid_w; gx++) {
+            int pix_off = gy * grid_w + gx;  /* 像素内偏移 */
+
             for (int a = 0; a < 3; a++) {
-                /* 每个 anchor 占 85 个值: tx,ty,tw,th,conf + 80 classes */
-                int base = ((a * 85 + 0) * grid_h + gy) * grid_w + gx;
-                int base_conf = ((a * 85 + 4) * grid_h + gy) * grid_w + gx;
-                int base_cls  = ((a * 85 + 5) * grid_h + gy) * grid_w + gx;
+                /* NCHW: channel c = a*85 + field, offset = c*plane + pix_off */
+                int ch_base = a * 85;
+                float tx = data[(ch_base + 0) * plane + pix_off];
+                float ty = data[(ch_base + 1) * plane + pix_off];
+                float tw = data[(ch_base + 2) * plane + pix_off];
+                float th = data[(ch_base + 3) * plane + pix_off];
+                float conf = sigmoid(data[(ch_base + 4) * plane + pix_off]);
 
-                /* 读 tx, ty, tw, th (已经 sigmoid/scaled 在 Python 里, 这里需要自己算) */
-                float tx = data[base + 0 * grid_h * grid_w];
-                float ty = data[base + 1 * grid_h * grid_w];
-                float tw = data[base + 2 * grid_h * grid_w];
-                float th = data[base + 3 * grid_h * grid_w];
-                float conf = sigmoid(data[base_conf]);
-
-                /* box 中心解码 */
                 float cx = (sigmoid(tx) * 2.0f - 0.5f + (float)gx) * (float)stride;
                 float cy = (sigmoid(ty) * 2.0f - 0.5f + (float)gy) * (float)stride;
+                float bw = powf(sigmoid(tw) * 2.0f, 2) * anchors[ai][a][0];
+                float bh = powf(sigmoid(th) * 2.0f, 2) * anchors[ai][a][1];
 
-                /* box 宽高解码 */
-                float bw_anchor = anchors[ai][a][0];
-                float bh_anchor = anchors[ai][a][1];
-                float bw = powf(sigmoid(tw) * 2.0f, 2) * bw_anchor;
-                float bh = powf(sigmoid(th) * 2.0f, 2) * bh_anchor;
-
-                /* 找最大 class 概率 */
+                /* 找最大 class (classes 从 ch_base+5 开始, 共 80 个) */
                 float max_cls = 0;
                 int   max_idx = 0;
                 for (int c = 0; c < NUM_CLASSES; c++) {
-                    float v = data[base_cls + c * grid_h * grid_w];
+                    float v = data[(ch_base + 5 + c) * plane + pix_off];
                     if (v > max_cls) { max_cls = v; max_idx = c; }
                 }
-                /* class score 用独立 logistic (sigmoid) */
                 float cls_score = conf * sigmoid(max_cls);
 
                 if (cls_score > OBJ_THRESH && *count < MAX_CANDIDATES) {
