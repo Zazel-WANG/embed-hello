@@ -26,17 +26,20 @@ pipeline {
             }
         }
         stage('Deploy to LubanCat') {
-            when {
-                branch 'main'
-            }
             steps {
                 sh 'echo "部署运行" > /tmp/current-stage.txt'
                 sh '''
                     VER=$(git rev-parse --short HEAD)
+                    if [ "${BRANCH_NAME}" = "main" ]; then
+                        DEPLOY_PATH="/home/cat/deploy/hello"
+                    else
+                        DEPLOY_PATH="/home/cat/deploy-dev/hello"
+                        ssh -o StrictHostKeyChecking=no cat@192.168.137.100 "mkdir -p /home/cat/deploy-dev"
+                    fi
                     cd workspace
                     ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell -Command \"New-Item -ItemType Directory -Force -Path E:/AI-helper/projects/embed-hello/workspace/build\""
                     scp -o StrictHostKeyChecking=no build/hello-${VER} HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER}
-                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "scp -o StrictHostKeyChecking=no E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER} cat@192.168.137.100:/home/cat/deploy/hello && ssh cat@192.168.137.100 chmod +x /home/cat/deploy/hello && ssh cat@192.168.137.100 /home/cat/deploy/hello"
+                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "scp -o StrictHostKeyChecking=no E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER} cat@192.168.137.100:${DEPLOY_PATH} && ssh cat@192.168.137.100 chmod +x ${DEPLOY_PATH} && ssh cat@192.168.137.100 ${DEPLOY_PATH}"
                 '''
             }
         }
