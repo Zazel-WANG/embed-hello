@@ -50,6 +50,14 @@ pipeline {
                 scp -o StrictHostKeyChecking=no /tmp/build-msg.b64 HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/build-status.txt
                 ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\cicd\\workspace\\deploy\\notify-build.ps1"
             '''
+            withCredentials([string(credentialsId: 'gitea-api-token', variable: 'GITEA_TOKEN')]) {
+                sh """
+                    curl -s -X POST "http://gitea:3000/api/v1/repos/wangzhongqi/embed-hello/statuses/\${GIT_COMMIT}" \
+                        -H "Authorization: token \${GITEA_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d '{"state":"success","description":"Build #${BUILD_NUMBER} passed","context":"continuous-integration/jenkins","target_url":"${BUILD_URL}"}'
+                """
+            }
         }
         failure {
             sh '''
@@ -58,6 +66,14 @@ pipeline {
                 scp -o StrictHostKeyChecking=no /tmp/build-msg.b64 HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/build-status.txt
                 ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell E:\\AI-helper\\projects\\cicd\\workspace\\deploy\\notify-build.ps1"
             '''
+            withCredentials([string(credentialsId: 'gitea-api-token', variable: 'GITEA_TOKEN')]) {
+                sh """
+                    curl -s -X POST "http://gitea:3000/api/v1/repos/wangzhongqi/embed-hello/statuses/\${GIT_COMMIT}" \
+                        -H "Authorization: token \${GITEA_TOKEN}" \
+                        -H "Content-Type: application/json" \
+                        -d '{"state":"failure","description":"Build #${BUILD_NUMBER} failed","context":"continuous-integration/jenkins","target_url":"${BUILD_URL}"}'
+                """
+            }
         }
     }
 }
