@@ -26,6 +26,9 @@ pipeline {
             }
         }
         stage('Deploy to LubanCat') {
+            when {
+                not { changeRequest() }
+            }
             steps {
                 sh 'echo "部署运行" > /tmp/current-stage.txt'
                 sh '''
