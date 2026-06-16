@@ -48,10 +48,13 @@ verify: $(BUILD_DIR)/$(TARGET)
 	echo "=== Expected: ELF 64-bit LSB executable, ARM aarch64 ==="
 
 # --- RKNN AI targets (板端原生编译) ---
-RKNN_CFLAGS := -Wall -O2 -I/usr/local/include
+AI_SRC_DIR := src/ai
+AI_INC_DIR := include/ai
+RKNN_CFLAGS := -Wall -O2 -I$(AI_INC_DIR)
 RKNN_LIBS := -lrknnrt
 
-ai-demo: $(SRC_DIR)/rknn_query_demo.c
+ai-demo: $(AI_SRC_DIR)/rknn_query_demo.c
+	mkdir -p $(BUILD_DIR)
 	$(CC) $(RKNN_CFLAGS) $< -o $(BUILD_DIR)/$@ $(RKNN_LIBS)
 	@echo "=== Built for RK3588 native ==="
 	@file $(BUILD_DIR)/$@
