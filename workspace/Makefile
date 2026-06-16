@@ -46,3 +46,15 @@ verify: $(BUILD_DIR)/$(TARGET)
 	@echo "=== Binary Info ===" && \
 	file $(BUILD_DIR)/$(TARGET) && \
 	echo "=== Expected: ELF 64-bit LSB executable, ARM aarch64 ==="
+
+# --- RKNN AI targets (板端原生编译) ---
+RKNN_CFLAGS := -Wall -O2 -I/usr/local/include
+RKNN_LIBS := -lrknnrt
+
+ai-demo: $(SRC_DIR)/rknn_query_demo.c
+	$(CC) $(RKNN_CFLAGS) $< -o $(BUILD_DIR)/$@ $(RKNN_LIBS)
+	@echo "=== Built for RK3588 native ==="
+	@file $(BUILD_DIR)/$@
+
+ai-clean:
+	rm -f $(BUILD_DIR)/ai-demo
