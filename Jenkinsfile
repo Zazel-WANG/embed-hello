@@ -47,13 +47,15 @@ pipeline {
         }
 
         // ============ AI 交叉编译阶段 ============
-        // 用 sh + docker run 代替 agent { docker } 语法 —— 无需 Docker Pipeline 插件
+        // 用 sh + docker run 代替 agent { docker } —— 无需 Docker Pipeline 插件
+        // 注意: Docker daemon 在宿主机, -v 路径需映射: /var/jenkins_home → /data/jenkins
         stage('AI Cross Compile') {
             steps {
                 sh 'echo "AI交叉编译" > /tmp/current-stage.txt'
                 sh '''
+                    HOST_WS=$(echo "${WORKSPACE}" | sed "s|/var/jenkins_home|/data/jenkins|")
                     docker run --rm --group-add 124 \
-                        -v "${WORKSPACE}":/workspace \
+                        -v "${HOST_WS}":/workspace \
                         -w /workspace/workspace \
                         embed-hello-builder:latest \
                         bash -c "
@@ -72,20 +74,21 @@ pipeline {
             steps {
                 sh 'echo "AI二进制验证" > /tmp/current-stage.txt'
                 sh '''
+                    HOST_WS=$(echo "${WORKSPACE}" | sed "s|/var/jenkins_home|/data/jenkins|")
                     docker run --rm --group-add 124 \
-                        -v "${WORKSPACE}":/workspace \
+                        -v "${HOST_WS}":/workspace \
                         -w /workspace/workspace \
                         embed-hello-builder:latest \
                         bash -c "
                             echo '=== AI Binary Verification ==='
                             for f in build/ai-*-cross; do
-                                echo \"--- \$f ---\"
-                                file \"\$f\"
-                                file \"\$f\" | grep -q 'ELF 64-bit.*ARM aarch64' || {
-                                    echo \"FAIL: \$f is not aarch64\"
+                                echo \\\"--- \\\$f ---\\\"
+                                file \\\"\\\$f\\\"
+                                file \\\"\\\$f\\\" | grep -q 'ELF 64-bit.*ARM aarch64' || {
+                                    echo \\\"FAIL: \\\$f is not aarch64\\\"
                                     exit 1
                                 }
-                                aarch64-linux-gnu-readelf -d \"\$f\" 2>/dev/null | grep NEEDED || true
+                                aarch64-linux-gnu-readelf -d \\\"\\\$f\\\" 2>/dev/null | grep NEEDED || true
                             done
                             echo '=== All AI binaries verified: aarch64 ==='
                         "
