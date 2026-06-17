@@ -47,23 +47,55 @@ verify: $(BUILD_DIR)/$(TARGET)
 	file $(BUILD_DIR)/$(TARGET) && \
 	echo "=== Expected: ELF 64-bit LSB executable, ARM aarch64 ==="
 
-# --- RKNN AI targets (板端原生编译) ---
+# --- AI 交叉编译目标 (sysroot = /usr/aarch64-linux-gnu/) ---
+# 动态链接 —— GStreamer 插件系统和 RKNN 驱动无法静态链接
 AI_SRC_DIR := src/ai
 AI_INC_DIR := include/ai
-RKNN_CFLAGS := -Wall -O2 -I$(AI_INC_DIR)
-RKNN_LIBS := -lrknnrt
+AI_SYSROOT := /usr/aarch64-linux-gnu
+GST_INC := $(AI_SYSROOT)/include/gstreamer-1.0
+GLIB_INC := $(AI_SYSROOT)/include/glib-2.0
 
-ai-demo: $(AI_SRC_DIR)/rknn_query_demo.c
+AI_CFLAGS := -Wall -O2 \
+	-I$(AI_INC_DIR) \
+	-I$(GST_INC) \
+	-I$(GLIB_INC)
+
+# 运行时库 (板上 Debian 11 自带)
+AI_LIBS := -lrknnrt -lgstreamer-1.0 -lglib-2.0 -lgobject-2.0 -lgmodule-2.0 -lX11 -lm
+
+$(BUILD_DIR)/yolov5_post.o: $(AI_SRC_DIR)/yolov5_post.c $(AI_SRC_DIR)/yolov5_post.h
+	$(CC) $(AI_CFLAGS) -c $< -o $@
+
+# ---- 独立模块 ----
+ai-query-cross: $(AI_SRC_DIR)/rknn_query_demo.c
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(RKNN_CFLAGS) $< -o $(BUILD_DIR)/$@ $(RKNN_LIBS)
-	@echo "=== Built for RK3588 native ==="
+	$(CC) $(AI_CFLAGS) $< -o $(BUILD_DIR)/$@ $(AI_LIBS)
 	@file $(BUILD_DIR)/$@
 
-ai-infer: $(AI_SRC_DIR)/rknn_infer_demo.c
+ai-infer-cross: $(AI_SRC_DIR)/rknn_infer_demo.c
 	mkdir -p $(BUILD_DIR)
-	$(CC) $(RKNN_CFLAGS) -I$(AI_INC_DIR) $< -o $(BUILD_DIR)/$@ $(RKNN_LIBS) -lm
-	@echo "=== Built for RK3588 native ==="
+	$(CC) $(AI_CFLAGS) $< -o $(BUILD_DIR)/$@ $(AI_LIBS)
 	@file $(BUILD_DIR)/$@
 
-ai-clean:
-	rm -f $(BUILD_DIR)/ai-demo $(BUILD_DIR)/ai-infer
+ai-gst-cross: $(AI_SRC_DIR)/gst_camera_test.c
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(AI_CFLAGS) $< -o $(BUILD_DIR)/$@ $(AI_LIBS)
+	@file $(BUILD_DIR)/$@
+
+ai-x11-cross: $(AI_SRC_DIR)/x11_display_test.c
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(AI_CFLAGS) $< -o $(BUILD_DIR)/$@ $(AI_LIBS)
+	@file $(BUILD_DIR)/$@
+
+# ---- 全链路集成 ----
+ai-full-cross: $(AI_SRC_DIR)/ai_demo.c $(BUILD_DIR)/yolov5_post.o
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(AI_CFLAGS) $^ -o $(BUILD_DIR)/$@ $(AI_LIBS)
+	@echo "=== AI full demo cross-compiled ==="
+	@file $(BUILD_DIR)/$@
+
+# ---- 全部 AI 目标 ----
+ai-all-cross: ai-query-cross ai-infer-cross ai-gst-cross ai-x11-cross ai-full-cross
+
+ai-cross-clean:
+	rm -f $(BUILD_DIR)/ai-*-cross $(BUILD_DIR)/yolov5_post.o

@@ -1,0 +1,24 @@
+# .dockerignore — 排除不需要的内容以加速 Docker build context
+# sysroot 必须包含在 build context 中
+
+# Git
+.git/
+
+# Build artifacts
+build/
+
+# Temp files
+.temp/
+*.log
+*.tmp
+*.bak
+
+# IDE
+.vscode/
+.idea/
+
+# Session
+.hot/
+
+# References (不需要在构建镜像中)
+references/

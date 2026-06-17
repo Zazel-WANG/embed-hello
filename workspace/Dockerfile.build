@@ -1,0 +1,32 @@
+# embed-hello AI 交叉编译环境
+# 用法: docker build -t embed-hello-builder:latest -f Dockerfile.build ..
+FROM ubuntu:22.04
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gcc-aarch64-linux-gnu \
+        libc6-dev-arm64-cross \
+        make \
+        file \
+        qemu-user-static \
+        openssh-client \
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 预填充的 ARM64 sysroot (由 sysroot-populate.sh 生成)
+COPY sysroot/ /
+
+# 验证 sysroot 关键文件
+RUN test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && \
+    test -f /usr/aarch64-linux-gnu/include/gstreamer-1.0/gst/gst.h && \
+    test -f /usr/aarch64-linux-gnu/include/glib-2.0/glib.h && \
+    test -f /usr/aarch64-linux-gnu/include/glib-2.0/glibconfig.h && \
+    test -f /usr/aarch64-linux-gnu/include/rknn_api.h && \
+    test -f /usr/aarch64-linux-gnu/lib/libgstreamer-1.0.so && \
+    test -f /usr/aarch64-linux-gnu/lib/libglib-2.0.so && \
+    test -f /usr/aarch64-linux-gnu/lib/libX11.so && \
+    test -f /usr/aarch64-linux-gnu/lib/librknnrt.so && \
+    echo "=== Sysroot verification PASSED ==="
+
+WORKDIR /workspace

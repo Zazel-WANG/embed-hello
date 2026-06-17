@@ -45,6 +45,79 @@ pipeline {
                 '''
             }
         }
+
+        // ============ AI 交叉编译阶段 ============
+        stage('AI Cross Compile') {
+            agent {
+                docker {
+                    image 'embed-hello-builder:latest'
+                    args '--group-add 124 -v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh 'echo "AI交叉编译" > /tmp/current-stage.txt'
+                sh '''
+                    echo "=== AI Cross Compilation ==="
+                    aarch64-linux-gnu-gcc --version | head -1
+                    echo "Sysroot check:"
+                    test -f /usr/aarch64-linux-gnu/include/rknn_api.h && echo "  RKNN headers: OK" || echo "  RKNN headers: MISSING"
+                    test -f /usr/aarch64-linux-gnu/include/gstreamer-1.0/gst/gst.h && echo "  GStreamer headers: OK" || echo "  GStreamer headers: MISSING"
+                    test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && echo "  X11 headers: OK" || echo "  X11 headers: MISSING"
+                    cd workspace
+                    make ai-all-cross
+                '''
+            }
+        }
+        stage('AI Binary Verify') {
+            agent {
+                docker {
+                    image 'embed-hello-builder:latest'
+                    args '--group-add 124 -v /var/run/docker.sock:/var/run/docker.sock'
+                    reuseNode true
+                }
+            }
+            steps {
+                sh 'echo "AI二进制验证" > /tmp/current-stage.txt'
+                sh '''
+                    cd workspace
+                    echo "=== AI Binary Verification ==="
+                    for f in build/ai-*-cross; do
+                        echo "--- $f ---"
+                        file "$f"
+                        file "$f" | grep -q "ELF 64-bit.*ARM aarch64" || {
+                            echo "FAIL: $f is not aarch64"
+                            exit 1
+                        }
+                        aarch64-linux-gnu-readelf -d "$f" 2>/dev/null | grep "NEEDED" || true
+                    done
+                    echo "=== All AI binaries verified: aarch64 ==="
+                '''
+            }
+        }
+        stage('Deploy AI to Board') {
+            when {
+                not { changeRequest() }
+            }
+            steps {
+                sh 'echo "部署AI" > /tmp/current-stage.txt'
+                sh '''
+                    if [ "${BRANCH_NAME}" = "main" ]; then
+                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
+                    else
+                        AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
+                    fi
+                    cd workspace
+                    ssh -o StrictHostKeyChecking=no cat@192.168.137.100 "mkdir -p ${AI_DEPLOY_PATH}"
+                    for f in build/ai-*-cross; do
+                        echo "Deploying: $f"
+                        scp -o StrictHostKeyChecking=no "$f" cat@192.168.137.100:"${AI_DEPLOY_PATH}/"
+                    done
+                    ssh -o StrictHostKeyChecking=no cat@192.168.137.100 "chmod +x ${AI_DEPLOY_PATH}/ai-*-cross"
+                    echo "=== AI demos deployed to ${AI_DEPLOY_PATH} ==="
+                '''
+            }
+        }
     }
     post {
         success {
