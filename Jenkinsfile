@@ -120,6 +120,35 @@ pipeline {
                 '''
             }
         }
+        stage('AI Smoke Test') {
+            when {
+                not { changeRequest() }
+            }
+            steps {
+                sh 'echo "AI冒烟测试" > /tmp/current-stage.txt'
+                sh '''
+                    if [ "${BRANCH_NAME}" = "main" ]; then
+                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
+                    else
+                        AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
+                    fi
+                    echo "=== AI Smoke Test: ai-query-cross ==="
+                    RESULT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                        HUAWEI@10.0.0.2 \
+                        "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 cat@192.168.137.100 \
+                            'timeout 30 ${AI_DEPLOY_PATH}/ai-query-cross 2>&1; echo EXIT_CODE:\$?'" 2>&1) || true
+                    echo "$RESULT"
+                    EXIT_CODE=$(echo "$RESULT" | grep "EXIT_CODE:" | tail -1 | cut -d: -f2 | tr -d " ")
+                    case "$EXIT_CODE" in
+                        0|124) echo "=== Smoke Test PASSED (exit=$EXIT_CODE) ===" ;;
+                        139)   echo "=== Smoke Test FAILED: SIGSEGV! ===" && exit 1 ;;
+                        134)   echo "=== Smoke Test FAILED: SIGABRT! ===" && exit 1 ;;
+                        "")    echo "=== Smoke Test WARN: board unreachable ===" ;;
+                        *)     echo "=== Smoke Test WARN: exit=$EXIT_CODE (not a crash) ===" ;;
+                    esac
+                '''
+            }
+        }
     }
     post {
         success {
