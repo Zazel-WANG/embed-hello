@@ -24,6 +24,7 @@ Thumbs.db
 # Temp
 *.tmp
 *.bak
+.temp/
 
 # Session recovery
 .hot/recovery.md
