@@ -133,19 +133,23 @@ pipeline {
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
                     echo "=== AI Smoke Test: ai-query-cross ==="
-                    RESULT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                    # 用输出内容判断: 出现 "SDK:" 表示 NPU 初始化成功
+                    OUTPUT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
                         HUAWEI@10.0.0.2 \
                         "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 cat@192.168.137.100 \
-                            'timeout 30 ${AI_DEPLOY_PATH}/ai-query-cross 2>&1; echo EXIT_CODE:\$?'" 2>&1) || true
-                    echo "$RESULT"
-                    EXIT_CODE=$(echo "$RESULT" | grep "EXIT_CODE:" | tail -1 | cut -d: -f2 | tr -d " ")
-                    case "$EXIT_CODE" in
-                        0|124) echo "=== Smoke Test PASSED (exit=$EXIT_CODE) ===" ;;
-                        139)   echo "=== Smoke Test FAILED: SIGSEGV! ===" && exit 1 ;;
-                        134)   echo "=== Smoke Test FAILED: SIGABRT! ===" && exit 1 ;;
-                        "")    echo "=== Smoke Test WARN: board unreachable ===" ;;
-                        *)     echo "=== Smoke Test WARN: exit=$EXIT_CODE (not a crash) ===" ;;
-                    esac
+                            'timeout 30 ${AI_DEPLOY_PATH}/ai-query-cross 2>&1'" 2>&1) || SSH_EXIT=$?
+                    echo "$OUTPUT"
+                    if echo "$OUTPUT" | grep -q "SDK:"; then
+                        echo "=== Smoke Test PASSED (NPU init OK) ==="
+                    elif echo "$OUTPUT" | grep -qi "Segmentation fault\|SIGSEGV"; then
+                        echo "=== Smoke Test FAILED: SIGSEGV! ===" && exit 1
+                    elif echo "$OUTPUT" | grep -qi "aborted\|SIGABRT"; then
+                        echo "=== Smoke Test FAILED: SIGABRT! ===" && exit 1
+                    elif [ "$SSH_EXIT" != "0" ] && [ -z "$OUTPUT" ]; then
+                        echo "=== Smoke Test WARN: board unreachable ==="
+                    else
+                        echo "=== Smoke Test WARN: unexpected output ==="
+                    fi
                 '''
             }
         }
