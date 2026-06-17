@@ -46,52 +46,51 @@ pipeline {
             }
         }
 
-        // ============ AI 交叉编译阶段 ============
-        // 用 sh + docker run 代替 agent { docker } —— 无需 Docker Pipeline 插件
-        // 注意: Docker daemon 在宿主机, -v 路径需映射: /var/jenkins_home → /data/jenkins
+        // ============ AI 交叉编译阶段 (Docker Pipeline 插件) ============
         stage('AI Cross Compile') {
+            agent {
+                docker {
+                    image 'embed-hello-builder:latest'
+                    args '--group-add 124'
+                    reuseNode true
+                }
+            }
             steps {
                 sh 'echo "AI交叉编译" > /tmp/current-stage.txt'
                 sh '''
-                    HOST_WS=$(echo "${WORKSPACE}" | sed "s|/var/jenkins_home|/data/jenkins|")
-                    docker run --rm --group-add 124 \
-                        -v "${HOST_WS}":/workspace \
-                        -w /workspace/workspace \
-                        embed-hello-builder:latest \
-                        bash -c "
-                            echo '=== AI Cross Compilation ==='
-                            aarch64-linux-gnu-gcc --version | head -1
-                            echo 'Sysroot check:'
-                            test -f /usr/aarch64-linux-gnu/include/rknn_api.h && echo '  RKNN headers: OK' || echo '  RKNN headers: MISSING'
-                            test -f /usr/aarch64-linux-gnu/include/gstreamer-1.0/gst/gst.h && echo '  GStreamer headers: OK' || echo '  GStreamer headers: MISSING'
-                            test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && echo '  X11 headers: OK' || echo '  X11 headers: MISSING'
-                            make ai-all-cross
-                        "
+                    echo "=== AI Cross Compilation ==="
+                    aarch64-linux-gnu-gcc --version | head -1
+                    echo "Sysroot check:"
+                    test -f /usr/aarch64-linux-gnu/include/rknn_api.h && echo "  RKNN headers: OK" || echo "  RKNN headers: MISSING"
+                    test -f /usr/aarch64-linux-gnu/include/gstreamer-1.0/gst/gst.h && echo "  GStreamer headers: OK" || echo "  GStreamer headers: MISSING"
+                    test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && echo "  X11 headers: OK" || echo "  X11 headers: MISSING"
+                    cd workspace && make ai-all-cross
                 '''
             }
         }
         stage('AI Binary Verify') {
+            agent {
+                docker {
+                    image 'embed-hello-builder:latest'
+                    args '--group-add 124'
+                    reuseNode true
+                }
+            }
             steps {
                 sh 'echo "AI二进制验证" > /tmp/current-stage.txt'
                 sh '''
-                    HOST_WS=$(echo "${WORKSPACE}" | sed "s|/var/jenkins_home|/data/jenkins|")
-                    docker run --rm --group-add 124 \
-                        -v "${HOST_WS}":/workspace \
-                        -w /workspace/workspace \
-                        embed-hello-builder:latest \
-                        bash -c "
-                            echo '=== AI Binary Verification ==='
-                            for f in build/ai-*-cross; do
-                                echo \\\"--- \\\$f ---\\\"
-                                file \\\"\\\$f\\\"
-                                file \\\"\\\$f\\\" | grep -q 'ELF 64-bit.*ARM aarch64' || {
-                                    echo \\\"FAIL: \\\$f is not aarch64\\\"
-                                    exit 1
-                                }
-                                aarch64-linux-gnu-readelf -d \\\"\\\$f\\\" 2>/dev/null | grep NEEDED || true
-                            done
-                            echo '=== All AI binaries verified: aarch64 ==='
-                        "
+                    cd workspace
+                    echo "=== AI Binary Verification ==="
+                    for f in build/ai-*-cross; do
+                        echo "--- $f ---"
+                        file "$f"
+                        file "$f" | grep -q "ELF 64-bit.*ARM aarch64" || {
+                            echo "FAIL: $f is not aarch64"
+                            exit 1
+                        }
+                        aarch64-linux-gnu-readelf -d "$f" 2>/dev/null | grep NEEDED || true
+                    done
+                    echo "=== All AI binaries verified: aarch64 ==="
                 '''
             }
         }
