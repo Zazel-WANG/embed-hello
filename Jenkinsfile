@@ -133,11 +133,10 @@ pipeline {
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
                     echo "=== AI Smoke Test: ai-query-cross ==="
-                    # 用输出内容判断: 出现 "SDK:" 表示 NPU 初始化成功
+                    # 关键: 外层单引号 (不用双引号), Windows OpenSSH 中转才不会把命令当成文件名
                     OUTPUT=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
                         HUAWEI@10.0.0.2 \
-                        "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 cat@192.168.137.100 \
-                            'timeout 30 ${AI_DEPLOY_PATH}/ai-query-cross 2>&1'" 2>&1) || SSH_EXIT=$?
+                        'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 cat@192.168.137.100 timeout 30 '"${AI_DEPLOY_PATH}"'/ai-query-cross 2>&1' 2>&1) || SSH_EXIT=$?
                     echo "$OUTPUT"
                     if echo "$OUTPUT" | grep -q "SDK:"; then
                         echo "=== Smoke Test PASSED (NPU init OK) ==="
