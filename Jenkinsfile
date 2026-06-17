@@ -108,12 +108,14 @@ pipeline {
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
                     cd workspace
-                    ssh -o StrictHostKeyChecking=no cat@192.168.137.100 "mkdir -p ${AI_DEPLOY_PATH}"
+                    # 通过 Windows 跳板: Jenkins → Windows(10.0.0.2) → 鲁班猫(192.168.137.100)
+                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "ssh cat@192.168.137.100 \"mkdir -p ${AI_DEPLOY_PATH}\""
                     for f in build/ai-*-cross; do
                         echo "Deploying: $f"
-                        scp -o StrictHostKeyChecking=no "$f" cat@192.168.137.100:"${AI_DEPLOY_PATH}/"
+                        scp -o StrictHostKeyChecking=no "$f" HUAWEI@10.0.0.2:"E:/temp/ai-deploy/"
+                        ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "scp -o StrictHostKeyChecking=no E:/temp/ai-deploy/$(basename $f) cat@192.168.137.100:${AI_DEPLOY_PATH}/"
                     done
-                    ssh -o StrictHostKeyChecking=no cat@192.168.137.100 "chmod +x ${AI_DEPLOY_PATH}/ai-*-cross"
+                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "ssh cat@192.168.137.100 \"chmod +x ${AI_DEPLOY_PATH}/ai-*-cross\""
                     echo "=== AI demos deployed to ${AI_DEPLOY_PATH} ==="
                 '''
             }
