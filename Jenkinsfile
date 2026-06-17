@@ -110,6 +110,7 @@ pipeline {
                     cd workspace
                     # 通过 Windows 跳板: Jenkins → Windows(10.0.0.2) → 鲁班猫(192.168.137.100)
                     ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "ssh cat@192.168.137.100 \"mkdir -p ${AI_DEPLOY_PATH}\""
+                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell -Command \"New-Item -ItemType Directory -Force -Path E:/temp/ai-deploy\""
                     for f in build/ai-*-cross; do
                         echo "Deploying: $f"
                         scp -o StrictHostKeyChecking=no "$f" HUAWEI@10.0.0.2:"E:/temp/ai-deploy/"
