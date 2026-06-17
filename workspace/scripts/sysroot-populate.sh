@@ -67,6 +67,13 @@ ssh "$BOARD" "cd /usr/lib/aarch64-linux-gnu && tar chf - \
     libmount.so* \
     libselinux.so* \
     libpcre2-8.so* \
+    libunwind.so* \
+    libdw.so* \
+    libelf.so* \
+    liblzma.so* \
+    libbz2.so* \
+    libbsd.so* \
+    libmd.so* \
     libEGL.so* \
     libGL.so* \
     libdrm.so* \

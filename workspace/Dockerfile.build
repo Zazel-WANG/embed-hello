@@ -17,6 +17,12 @@ RUN apt-get update && \
 # 预填充的 ARM64 sysroot (由 sysroot-populate.sh 生成)
 COPY sysroot/ /
 
+# 修复: COPY 可能覆盖了交叉编译器提供的 glibc linker scripts
+# 重装 libc6-dev-arm64-cross 恢复它们
+RUN apt-get update && \
+    apt-get install -y --reinstall libc6-dev-arm64-cross && \
+    rm -rf /var/lib/apt/lists/*
+
 # 验证 sysroot 关键文件
 RUN test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && \
     test -f /usr/aarch64-linux-gnu/include/gstreamer-1.0/gst/gst.h && \
