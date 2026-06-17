@@ -95,20 +95,88 @@ static void draw_box(uint8_t *buf, int x1, int y1, int x2, int y2,
     /* 标签文字 (简易: 画白色像素块代替文字) */
 }
 
-/* ── HUD 叠加：推理耗时 + FPS (X11 字体) ── */
-static void draw_hud(Display *dpy, Window win, GC gc,
-                     float infer_ms, float fps) {
+
+/* ── 简易 5x7 像素字体 (逐像素验证) ── */
+/* bit4=左, bit0=右, 1=亮. 前2行全零=上行空间 */
+static const unsigned char font_5x7[][7] = {
+    ['0']={0x0E,0x11,0x11,0x11,0x11,0x11,0x0E}, /*  0:  ###   */
+    ['1']={0x04,0x0C,0x04,0x04,0x04,0x04,0x0E}, /*  1:   #    */
+    ['2']={0x0E,0x11,0x01,0x06,0x08,0x10,0x1F}, /*  2:  ###   */
+    ['3']={0x0E,0x11,0x01,0x06,0x01,0x11,0x0E}, /*  3:  ###   */
+    ['4']={0x02,0x06,0x0A,0x12,0x1F,0x02,0x02}, /*  4:    #   */
+    ['5']={0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E}, /*  5: #####  */
+    ['6']={0x0E,0x10,0x10,0x1E,0x11,0x11,0x0E}, /*  6:  ###   */
+    ['7']={0x1F,0x01,0x02,0x04,0x08,0x08,0x08}, /*  7: #####  */
+    ['8']={0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E}, /*  8:  ###   */
+    ['9']={0x0E,0x11,0x11,0x0F,0x01,0x11,0x0E}, /*  9:  ###   */
+    ['.']={0x00,0x00,0x00,0x00,0x00,0x04,0x00}, /*  .:        */
+    [':']={0x00,0x04,0x00,0x00,0x04,0x00,0x00}, /*  ::  #     */
+    ['|']={0x04,0x04,0x04,0x00,0x04,0x04,0x04}, /*  |:  #     */
+    [' ']={0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /* sp:        */
+    ['I']={0x0E,0x04,0x04,0x04,0x04,0x04,0x0E}, /*  I:  ###   */
+    ['n']={0x00,0x00,0x16,0x19,0x11,0x11,0x11}, /*  n:        */
+    ['f']={0x06,0x09,0x08,0x1C,0x08,0x08,0x08}, /*  f:  ##    */
+    ['e']={0x00,0x00,0x0E,0x11,0x1F,0x10,0x0E}, /*  e:        */
+    ['r']={0x00,0x00,0x16,0x19,0x10,0x10,0x10}, /*  r:        */
+    ['m']={0x00,0x00,0x1B,0x15,0x15,0x15,0x15}, /*  m:        */
+    ['s']={0x00,0x00,0x0F,0x10,0x0E,0x01,0x1E}, /*  s:        */
+    ['F']={0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}, /*  F: #####  */
+    ['P']={0x1E,0x11,0x11,0x1E,0x10,0x10,0x10}, /*  P: ####   */
+    ['S']={0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E}, /*  S:  ###   */
+};
+
+/* 检查字符是否在字体表中 */
+static int font_has(char c) {
+    static const char supported[] =
+        "0123456789.:| InfersmFPS";
+    for (const char *p = supported; *p; p++)
+        if (*p == c) return 1;
+    return 0;
+}
+
+/* 在 BGRA buffer 上画一个字符 (x,y), color=0x00BBGGRR */
+static void draw_char_bgra(uint8_t *buf, int x, int y, char c, uint32_t color) {
+    if (x < 0 || x + 5 > WIN_W || y < 0 || y + 7 > WIN_H) return;
+    if (!font_has(c)) c = ' ';
+    const unsigned char *glyph = font_5x7[(unsigned char)c];
+    uint8_t b = (color >> 16) & 0xFF, g = (color >> 8) & 0xFF, r = color & 0xFF;
+    for (int row = 0; row < 7; row++) {
+        unsigned char bits = glyph[row];
+        for (int col = 0; col < 5; col++) {
+            if (bits & (1 << (4 - col))) {
+                int off = ((y + row) * WIN_W + (x + col)) * 4;
+                buf[off] = b; buf[off+1] = g; buf[off+2] = r; buf[off+3] = 255;
+            }
+        }
+    }
+}
+
+/* 在 BGRA buffer 上画字符串 (x,y) */
+static void draw_text_bgra(uint8_t *buf, int x, int y, const char *text, uint32_t color) {
+    while (*text) {
+        draw_char_bgra(buf, x, y, *text, color);
+        x += 6;  /* 5px char + 1px gap */
+        text++;
+    }
+}
+
+/* ── HUD 叠加：推理耗时 + FPS (BGRA buffer 像素渲染, 无闪烁) ── */
+static void draw_hud_bgra(uint8_t *buf, float infer_ms, float fps) {
     char text[64];
-    snprintf(text, sizeof(text), "Infer: %.1fms | FPS: %.1f", infer_ms, fps);
+    snprintf(text, sizeof(text), "Infer:%.0fms|FPS:%.1f", infer_ms, fps);
 
-    Font font = XLoadFont(dpy, "fixed");
-    if (!font) return;
-    XSetFont(dpy, gc, font);
+    /* 黑色半透明背景条 (top-right, 240x28) */
+    int bar_x = WIN_W - 244, bar_y = 6;
+    if (bar_x < 0) bar_x = 0;
+    for (int y = bar_y; y < bar_y + 28 && y < WIN_H; y++)
+        for (int x = bar_x; x < bar_x + 244 && x < WIN_W; x++) {
+            int off = (y * WIN_W + x) * 4;
+            buf[off]   = (buf[off]   >> 1) & 0x7F;   /* 50% darken */
+            buf[off+1] = (buf[off+1] >> 1) & 0x7F;
+            buf[off+2] = (buf[off+2] >> 1) & 0x7F;
+        }
 
-    XSetForeground(dpy, gc, 0xFFFFFF);
-    XDrawString(dpy, win, gc, WIN_W - 190, 18, text, strlen(text));
-
-    XUnloadFont(dpy, font);
+    draw_text_bgra(buf, bar_x + 4, bar_y + 4, text, 0x00FF00); /* green text */
 }
 
 /* ── X11 事件处理 ── */
@@ -124,6 +192,7 @@ static void handle_x11(Display *dpy) {
 }
 
 int main(void) {
+    setbuf(stdout, NULL);  /* 禁用缓冲, X 连接断开时 printf 不丢 */
     /* ══ 1. GStreamer 初始化 ══ */
     gst_init(NULL, NULL);
     GstElement *pipe = gst_parse_launch(
@@ -258,9 +327,11 @@ int main(void) {
             disp_buf[i*4+3] = 0;
         }
 
-        /* 显示 + HUD 叠加 */
+        /* HUD 叠加到 BGRA buffer (画在图像内部, 无闪烁) */
+        draw_hud_bgra(disp_buf, infer_ms, fps_ema);
+
+        /* 显示 */
         XPutImage(dpy, win, gc, ximg, 0, 0, 0, 0, WIN_W, WIN_H);
-        draw_hud(dpy, win, gc, infer_ms, fps_ema);
         handle_x11(dpy);
 
         rknn_outputs_release(ctx, 3, outputs);
