@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <math.h>
 #include <unistd.h>
+#define _POSIX_C_SOURCE 199309L
+#include <time.h>
 #include <gst/gst.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -20,6 +22,7 @@
 #define WIN_W  640
 #define WIN_H  640
 #define MAX_RESULTS 100
+#define EMA_ALPHA 0.1f
 
 /* COCO class names (80 classes) */
 static const char *coco_names[80] = {
@@ -92,6 +95,22 @@ static void draw_box(uint8_t *buf, int x1, int y1, int x2, int y2,
     /* 标签文字 (简易: 画白色像素块代替文字) */
 }
 
+/* ── HUD 叠加：推理耗时 + FPS (X11 字体) ── */
+static void draw_hud(Display *dpy, Window win, GC gc,
+                     float infer_ms, float fps) {
+    char text[64];
+    snprintf(text, sizeof(text), "Infer: %.1fms | FPS: %.1f", infer_ms, fps);
+
+    Font font = XLoadFont(dpy, "fixed");
+    if (!font) return;
+    XSetFont(dpy, gc, font);
+
+    XSetForeground(dpy, gc, 0xFFFFFF);
+    XDrawString(dpy, win, gc, WIN_W - 190, 18, text, strlen(text));
+
+    XUnloadFont(dpy, font);
+}
+
 /* ── X11 事件处理 ── */
 static void handle_x11(Display *dpy) {
     while (XPending(dpy)) {
@@ -161,6 +180,11 @@ int main(void) {
 
     /* ══ 4. 主循环 ══ */
     int frame_count = 0;
+    struct timespec ts;
+    double t_last_ns;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    t_last_ns = ts.tv_sec * 1e9 + ts.tv_nsec;
+    float fps_ema = 0.0f, infer_ms = 0.0f;
     printf("Running... Press ESC to exit.\n");
 
     while (g_running) {
@@ -172,16 +196,27 @@ int main(void) {
         }
         if (!g_running) break;
 
+        /* 帧开始时间戳 */
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        double t_frame_start = ts.tv_sec * 1e9 + ts.tv_nsec;
+
         /* BGR(RGB) → INT8 量化 (zp=-128) */
         int8_t *input = malloc(WIN_W * WIN_H * 3);
         for (int i = 0; i < WIN_W * WIN_H * 3; i++)
             input[i] = (int8_t)((int)g_frame[i] - 128);
 
-        /* NPU 推理 */
+        /* NPU 推理计时 */
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        double t_before_infer = ts.tv_sec * 1e9 + ts.tv_nsec;
+
         rknn_input rk_in = {0, input, (uint32_t)(WIN_W * WIN_H * 3),
                              0, RKNN_TENSOR_INT8, RKNN_TENSOR_NHWC};
         rknn_inputs_set(ctx, 1, &rk_in);
         rknn_run(ctx, NULL);
+
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        double t_after_infer = ts.tv_sec * 1e9 + ts.tv_nsec;
+        infer_ms = (float)((t_after_infer - t_before_infer) / 1e6);
 
         rknn_output outputs[3];
         memset(outputs, 0, sizeof(outputs));
@@ -207,7 +242,12 @@ int main(void) {
                      label, color);
         }
 
-        /* FPS 叠加 (右上角白色文字背景) */
+        /* FPS (EMA 平滑) */
+        double dt_ns = t_frame_start - t_last_ns;
+        t_last_ns = t_frame_start;
+        float instant_fps = (dt_ns > 0.0) ? (float)(1e9 / dt_ns) : 0.0f;
+        if (fps_ema < 0.1f) fps_ema = instant_fps;
+        else fps_ema = fps_ema * (1.0f - EMA_ALPHA) + instant_fps * EMA_ALPHA;
         frame_count++;
 
         /* BGR(3-byte) → BGRA(4-byte) for X11 */
@@ -218,8 +258,9 @@ int main(void) {
             disp_buf[i*4+3] = 0;
         }
 
-        /* 显示 */
+        /* 显示 + HUD 叠加 */
         XPutImage(dpy, win, gc, ximg, 0, 0, 0, 0, WIN_W, WIN_H);
+        draw_hud(dpy, win, gc, infer_ms, fps_ema);
         handle_x11(dpy);
 
         rknn_outputs_release(ctx, 3, outputs);
@@ -227,7 +268,8 @@ int main(void) {
     }
 
     /* ══ 5. 清理 ══ */
-    printf("Frames: %d. Shutting down...\n", frame_count);
+    printf("Frames: %d. Last infer: %.1fms, FPS: %.1f. Shutting down...\n",
+           frame_count, infer_ms, fps_ema);
     XDestroyImage(ximg); /* ximg owns disp_buf */
     XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XCloseDisplay(dpy);
     rknn_destroy(ctx); free(mdata);
