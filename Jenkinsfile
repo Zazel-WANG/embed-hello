@@ -141,9 +141,9 @@ pipeline {
                     echo "$OUTPUT"
                     if echo "$OUTPUT" | grep -q "SDK:"; then
                         echo "=== Smoke Test PASSED (NPU init OK) ==="
-                    elif echo "$OUTPUT" | grep -qi "Segmentation fault\|SIGSEGV"; then
+                    elif echo "$OUTPUT" | grep -qiE "Segmentation fault|SIGSEGV"; then
                         echo "=== Smoke Test FAILED: SIGSEGV! ===" && exit 1
-                    elif echo "$OUTPUT" | grep -qi "aborted\|SIGABRT"; then
+                    elif echo "$OUTPUT" | grep -qiE "aborted|SIGABRT"; then
                         echo "=== Smoke Test FAILED: SIGABRT! ===" && exit 1
                     elif [ "$SSH_EXIT" != "0" ] && [ -z "$OUTPUT" ]; then
                         echo "=== Smoke Test WARN: board unreachable ==="
