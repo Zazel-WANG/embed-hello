@@ -197,8 +197,7 @@ int main(void) {
     gst_init(NULL, NULL);
     GstElement *pipe = gst_parse_launch(
         "v4l2src device=/dev/video-camera0 ! "
-        "video/x-raw,format=NV12,width=3840,height=2160 ! "
-        "videoscale ! video/x-raw,width=640,height=640 ! "
+        "video/x-raw,format=NV12,width=640,height=640 ! "
         "videoconvert ! video/x-raw,format=BGR ! "
         "appsink name=sink emit-signals=true sync=false", NULL);
     if (!pipe) { fprintf(stderr, "GStreamer pipeline failed\n"); return 1; }
