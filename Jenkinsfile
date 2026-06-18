@@ -41,7 +41,7 @@ pipeline {
                     cd workspace
                     ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "powershell -Command \"New-Item -ItemType Directory -Force -Path E:/AI-helper/projects/embed-hello/workspace/build\""
                     scp -o StrictHostKeyChecking=no build/hello-${VER} HUAWEI@10.0.0.2:E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER}
-                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "ssh cat@192.168.137.100 \"mkdir -p /home/cat/deploy-dev\" && scp -o StrictHostKeyChecking=no E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER} cat@192.168.137.100:${DEPLOY_PATH} && ssh cat@192.168.137.100 chmod +x ${DEPLOY_PATH} && ssh cat@192.168.137.100 ${DEPLOY_PATH}"
+                    ssh -o StrictHostKeyChecking=no HUAWEI@10.0.0.2 "ssh cat@192.168.137.100 \"mkdir -p \$(dirname ${DEPLOY_PATH})\" && scp -o StrictHostKeyChecking=no E:/AI-helper/projects/embed-hello/workspace/build/hello-${VER} cat@192.168.137.100:${DEPLOY_PATH} && ssh cat@192.168.137.100 chmod +x ${DEPLOY_PATH} && ssh cat@192.168.137.100 ${DEPLOY_PATH}"
                 '''
             }
         }
