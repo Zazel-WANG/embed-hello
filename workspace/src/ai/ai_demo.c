@@ -213,7 +213,7 @@ int main(void) {
     printf("Camera ready.\n");
 
     /* ══ 2. 加载 YOLOv5s 模型 ══ */
-    const char *model_path = "/home/cat/ai-demo/yolov5s-640-640.rknn";
+    const char *model_path = "/home/cat/models/yolov5s-640-640.rknn";
     FILE *fp = fopen(model_path, "rb");
     if (!fp) { perror(model_path); return 1; }
     fseek(fp, 0, SEEK_END); long msize = ftell(fp); fseek(fp, 0, SEEK_SET);

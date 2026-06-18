@@ -97,7 +97,7 @@ static void top5(const int8_t *output, float scale, int zp) {
 
 int main(int argc, char **argv) {
     const char *model_path = argc > 1 ? argv[1]
-        : "/home/cat/lubancat_rk_code_storage/python_lubancat_RK_tutorial_code/ai/npu/rknn_toolkit_lite2/examples/inference_with_lite/resnet18_for_rk3588.rknn";
+        : "/home/cat/models/yolov5s-640-640.rknn";
     const char *img_path   = argc > 2 ? argv[2] : "cat.webp";
     int ret;
 
