@@ -33,7 +33,7 @@ pipeline {
                 sh 'echo "部署运行" > /tmp/current-stage.txt'
                 sh '''
                     VER=$(git rev-parse --short HEAD)
-                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    BRANCH="${BRANCH_NAME:-main}"
                     if [ "${BRANCH}" = "main" ]; then
                         DEPLOY_PATH="/home/cat/deploy/hello"
                     else
@@ -102,7 +102,7 @@ pipeline {
             steps {
                 sh 'echo "部署AI" > /tmp/current-stage.txt'
                 sh '''
-                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    BRANCH="${BRANCH_NAME:-main}"
                     if [ "${BRANCH}" = "main" ]; then
                         AI_DEPLOY_PATH="/home/cat/deploy/ai"
                     else
@@ -129,7 +129,7 @@ pipeline {
             steps {
                 sh 'echo "AI冒烟测试" > /tmp/current-stage.txt'
                 sh '''
-                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    BRANCH="${BRANCH_NAME:-main}"
                     if [ "${BRANCH}" = "main" ]; then
                         AI_DEPLOY_PATH="/home/cat/deploy/ai"
                     else
