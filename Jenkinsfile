@@ -35,7 +35,7 @@ pipeline {
                     VER=$(git rev-parse --short HEAD)
                     BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
                     if [ "${BRANCH}" = "main" ]; then
-                        DEPLOY_PATH="/home/cat/deploy-prod/hello"
+                        DEPLOY_PATH="/home/cat/deploy/hello"
                     else
                         DEPLOY_PATH="/home/cat/deploy-dev/hello"
                     fi
@@ -104,7 +104,7 @@ pipeline {
                 sh '''
                     BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
                     if [ "${BRANCH}" = "main" ]; then
-                        AI_DEPLOY_PATH="/home/cat/deploy-prod/ai"
+                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
                     else
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
@@ -131,7 +131,7 @@ pipeline {
                 sh '''
                     BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
                     if [ "${BRANCH}" = "main" ]; then
-                        AI_DEPLOY_PATH="/home/cat/deploy-prod/ai"
+                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
                     else
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
