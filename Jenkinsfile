@@ -33,8 +33,9 @@ pipeline {
                 sh 'echo "部署运行" > /tmp/current-stage.txt'
                 sh '''
                     VER=$(git rev-parse --short HEAD)
-                    if [ "${BRANCH_NAME}" = "main" ]; then
-                        DEPLOY_PATH="/home/cat/deploy/hello"
+                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    if [ "${BRANCH}" = "main" ]; then
+                        DEPLOY_PATH="/home/cat/deploy-prod/hello"
                     else
                         DEPLOY_PATH="/home/cat/deploy-dev/hello"
                     fi
@@ -101,8 +102,9 @@ pipeline {
             steps {
                 sh 'echo "部署AI" > /tmp/current-stage.txt'
                 sh '''
-                    if [ "${BRANCH_NAME}" = "main" ]; then
-                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
+                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    if [ "${BRANCH}" = "main" ]; then
+                        AI_DEPLOY_PATH="/home/cat/deploy-prod/ai"
                     else
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
@@ -127,8 +129,9 @@ pipeline {
             steps {
                 sh 'echo "AI冒烟测试" > /tmp/current-stage.txt'
                 sh '''
-                    if [ "${BRANCH_NAME}" = "main" ]; then
-                        AI_DEPLOY_PATH="/home/cat/deploy/ai"
+                    BRANCH="${BRANCH_NAME:-$(git rev-parse --abbrev-ref HEAD)}"
+                    if [ "${BRANCH}" = "main" ]; then
+                        AI_DEPLOY_PATH="/home/cat/deploy-prod/ai"
                     else
                         AI_DEPLOY_PATH="/home/cat/deploy-dev/ai"
                     fi
