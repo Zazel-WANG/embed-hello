@@ -29,10 +29,12 @@ RUN test -f /usr/aarch64-linux-gnu/include/X11/Xlib.h && \
     test -f /usr/aarch64-linux-gnu/include/glib-2.0/glib.h && \
     test -f /usr/aarch64-linux-gnu/include/glib-2.0/glibconfig.h && \
     test -f /usr/aarch64-linux-gnu/include/rknn_api.h && \
+    test -f /usr/aarch64-linux-gnu/include/jpeglib.h && \
     test -f /usr/aarch64-linux-gnu/lib/libgstreamer-1.0.so && \
     test -f /usr/aarch64-linux-gnu/lib/libglib-2.0.so && \
     test -f /usr/aarch64-linux-gnu/lib/libX11.so && \
     test -f /usr/aarch64-linux-gnu/lib/librknnrt.so && \
+    test -f /usr/aarch64-linux-gnu/lib/libjpeg.so && \
     echo "=== Sysroot verification PASSED ==="
 
 WORKDIR /workspace
