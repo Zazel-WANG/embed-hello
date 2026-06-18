@@ -13,7 +13,6 @@
 #define _POSIX_C_SOURCE 199309L
 #include <time.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <gst/gst.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -196,46 +195,32 @@ static void save_png(const uint8_t *bgr, int w, int h, const char *path) {
     free(rgb);
 }
 
-/* ── 磁盘剩余 MB ── */
-static long get_free_mb(void) {
-    struct statvfs st;
-    if (statvfs(BASE_DIR, &st) < 0) statvfs("/home/cat", &st);
-    return (long)st.f_bavail * st.f_frsize / 1024 / 1024;
-}
-
-/* ── 产品 HUD：状态 + 统计 ── */
+/* ── 产品 HUD：状态 + 性能 ── */
 static void draw_hud_bgra(uint8_t *buf, float infer_ms, float fps) {
     char text[64];
     time_t now = time(NULL);
     int cooling = COOLDOWN_SEC - (int)(now - g_last_capture);
-    long free_mb = get_free_mb();
 
-    /* 状态行 */
     int bar_x = WIN_W - 248, bar_y = 6;
     if (bar_x < 0) bar_x = 0;
-    /* 半透明黑底 */
     for (int y = bar_y; y < bar_y + 52 && y < WIN_H; y++)
         for (int x = bar_x; x < bar_x + 248 && x < WIN_W; x++) {
             int o = (y * WIN_W + x) * 4;
-            buf[o] = (buf[o] >> 1) & 0x7F;
+            buf[o]   = (buf[o]   >> 1) & 0x7F;
             buf[o+1] = (buf[o+1] >> 1) & 0x7F;
             buf[o+2] = (buf[o+2] >> 1) & 0x7F;
         }
 
     if (cooling > 0) {
         snprintf(text, sizeof(text), "ALERT! Cool %ds", cooling);
-        draw_text_bgra(buf, bar_x + 4, bar_y + 4, text, 0x0000FF); /* red */
+        draw_text_bgra(buf, bar_x + 4, bar_y + 4, text, 0x0000FF);
     } else {
-        draw_text_bgra(buf, bar_x + 4, bar_y + 4, "MONITORING", 0x00FF00); /* green */
+        draw_text_bgra(buf, bar_x + 4, bar_y + 4, "MONITORING", 0x00FF00);
     }
 
-    /* 统计行 */
     snprintf(text, sizeof(text), "Infer:%.0fms  FPS:%.1f", infer_ms, fps);
     draw_text_bgra(buf, bar_x + 4, bar_y + 22, text, 0x00AA00);
-    snprintf(text, sizeof(text), "Free:%ldMB", free_mb);
-    draw_text_bgra(buf, bar_x + 180, bar_y + 22, text, 0xAAAAAA);
 
-    /* 第三行: timestamp */
     struct tm *t = localtime(&now);
     strftime(text, sizeof(text), "%H:%M:%S", t);
     draw_text_bgra(buf, bar_x + 4, bar_y + 40, text, 0x888888);
