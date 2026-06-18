@@ -36,3 +36,19 @@
 | ISP | Rockchip rkisp_v6 |
 | 3A 引擎 | rkaiq_3A_server (AIQ v5.0x1.3) |
 | IQ 文件 | `/etc/iqfiles/imx415_CMK-OT2022-PX1_IR0147-50IRC-8M-F20.json` |
+
+### 多分支触发治理（2026-06-18）
+
+**问题**：一次 push 触发 2-3 次构建，且 main 被 feature 推送连带触发。
+
+**根因排查**：
+1. 三重触发源叠加：Gitea webhook + PeriodicFolderTrigger(每分钟) + SCMTrigger(每5分钟)
+2. Gitea 插件全量 reindex 后对所有发现分支触发构建
+3. `NoTriggerBranchProperty` 只抑制 SCM polling 事件，不抑制 webhook 事件
+
+**最终架构**：Multibranch + 独立 Pipeline 分离
+- **embed-hello Multibranch**：单 Gitea 源，通配符过滤器 `feature/*`，新分支自动发现自动构建
+- **embed-hello-main**：独立 Pipeline，Git SCM 指向 main，无触发器，仅手动 Build Now
+- PeriodicFolderTrigger：已禁用（webhook 稳定后不需要保底）
+
+**效果**：push feature → 1 次构建 1 个弹窗，main 不再被连带触发
