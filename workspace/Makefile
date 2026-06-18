@@ -55,13 +55,13 @@ AI_SYSROOT := /usr/aarch64-linux-gnu
 GST_INC := $(AI_SYSROOT)/include/gstreamer-1.0
 GLIB_INC := $(AI_SYSROOT)/include/glib-2.0
 
-AI_CFLAGS := -Wall -O2 -static \
+AI_CFLAGS := -Wall -O2 \
 	-I$(AI_INC_DIR) \
 	-I$(GST_INC) \
 	-I$(GLIB_INC)
 
 # 运行时库 (板上 Debian 11 自带)
-AI_LIBS := -lrknnrt -ljpeg -lgstreamer-1.0 -lglib-2.0 -lgobject-2.0 -lgmodule-2.0 -lX11 -lm
+AI_LIBS := -lrknnrt -lgstreamer-1.0 -lglib-2.0 -lgobject-2.0 -lgmodule-2.0 -lX11 -lm
 
 $(BUILD_DIR)/yolov5_post.o: $(AI_SRC_DIR)/yolov5_post.c $(AI_SRC_DIR)/yolov5_post.h
 	$(CC) $(AI_CFLAGS) -c $< -o $@

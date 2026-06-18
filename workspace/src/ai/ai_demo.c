@@ -18,7 +18,8 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
-#include <jpeglib.h>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 #include <rknn_api.h>
 #include "yolov5_post.h"
 
@@ -183,36 +184,15 @@ static void draw_text_bgra(uint8_t *buf, int x, int y, const char *text, uint32_
     }
 }
 
-/* ── JPEG 截图 (libjpeg) ── */
-static void save_jpeg(const uint8_t *bgr, int w, int h,
-                      const char *path, int quality) {
+/* ── PNG 截图 (stb_image_write, 零依赖) ── */
+static void save_png(const uint8_t *bgr, int w, int h, const char *path) {
     uint8_t *rgb = malloc(w * h * 3);
     for (int i = 0; i < w * h; i++) {
-        rgb[i*3+0] = bgr[i*3+2];  /* B→R */
-        rgb[i*3+1] = bgr[i*3+1];  /* G */
-        rgb[i*3+2] = bgr[i*3+0];  /* R→B */
+        rgb[i*3+0] = bgr[i*3+2];
+        rgb[i*3+1] = bgr[i*3+1];
+        rgb[i*3+2] = bgr[i*3+0];
     }
-    FILE *fp = fopen(path, "wb");
-    if (!fp) { free(rgb); return; }
-    struct jpeg_compress_struct cinfo;
-    struct jpeg_error_mgr jerr;
-    cinfo.err = jpeg_std_error(&jerr);
-    jpeg_create_compress(&cinfo);
-    jpeg_stdio_dest(&cinfo, fp);
-    cinfo.image_width      = w;
-    cinfo.image_height     = h;
-    cinfo.input_components = 3;
-    cinfo.in_color_space   = JCS_RGB;
-    jpeg_set_defaults(&cinfo);
-    jpeg_set_quality(&cinfo, quality, TRUE);
-    jpeg_start_compress(&cinfo, TRUE);
-    while (cinfo.next_scanline < cinfo.image_height) {
-        JSAMPROW row = (JSAMPROW)(rgb + cinfo.next_scanline * w * 3);
-        jpeg_write_scanlines(&cinfo, &row, 1);
-    }
-    jpeg_finish_compress(&cinfo);
-    jpeg_destroy_compress(&cinfo);
-    fclose(fp);
+    stbi_write_png(path, w, h, 3, rgb, w * 3);
     free(rgb);
 }
 
@@ -406,10 +386,10 @@ int main(void) {
                 g_last_capture = now;
                 char path[256];
                 struct tm *t = localtime(&now);
-                snprintf(path, sizeof(path), BASE_DIR "/captures/%04d-%02d-%02d_%02d%02d%02d_person.jpg",
+                snprintf(path, sizeof(path), BASE_DIR "/captures/%04d-%02d-%02d_%02d%02d%02d_person.png",
                          1900+t->tm_year, t->tm_mon+1, t->tm_mday,
                          t->tm_hour, t->tm_min, t->tm_sec);
-                save_jpeg(g_frame, WIN_W, WIN_H, path, 85);
+                save_png(g_frame, WIN_W, WIN_H, path);
                 FILE *log = fopen(BASE_DIR "/events.log", "a");
                 if (log) {
                     fprintf(log, "%s conf=%.2f\n", path, dets[0].score);
