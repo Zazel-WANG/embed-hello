@@ -1,8 +1,8 @@
 /*
- * 花架子 Phase 2 Step 6 — 全链路整合 — YOLOv5s NPU + HUD 实时检测
+ * AI 安防摄像头 — YOLOv5s 实时人形检测 + 抓拍
  *
  * GStreamer(v4l2src→640×640 BGR) → NPU(YOLOv5s) → 后处理(NMS) → 画框 → X11 显示
- * 按 ESC 退出
+ * 检测到 person → JPEG 截图 + 事件日志 | H 键切换 HUD | ESC 退出
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,17 +12,22 @@
 #include <unistd.h>
 #define _POSIX_C_SOURCE 199309L
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <gst/gst.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
+#include <jpeglib.h>
 #include <rknn_api.h>
 #include "yolov5_post.h"
 
-#define WIN_W  640
-#define WIN_H  640
-#define MAX_RESULTS 100
-#define EMA_ALPHA 0.1f
+#define WIN_W        640
+#define WIN_H        640
+#define MAX_RESULTS  100
+#define EMA_ALPHA    0.1f
+#define COOLDOWN_SEC 10
+#define BASE_DIR     "/home/cat/security-cam"
 
 /* COCO class names (80 classes) */
 static const char *coco_names[80] = {
@@ -39,9 +44,11 @@ static const char *coco_names[80] = {
 };
 
 /* 全局状态 */
-static int g_running = 1;
+static int g_running  = 1;
+static int g_show_hud = 1;
 static uint8_t g_frame[WIN_W * WIN_H * 3];  /* BGR */
-static int      g_frame_ready = 0;
+static int     g_frame_ready = 0;
+static time_t g_last_capture = 0;
 
 /* ── GStreamer 回调 ── */
 static GstFlowReturn on_new_sample(GstElement *sink, gpointer data) {
@@ -123,14 +130,30 @@ static const unsigned char font_5x7[][7] = {
     ['F']={0x1F,0x10,0x10,0x1E,0x10,0x10,0x10}, /*  F: #####  */
     ['P']={0x1E,0x11,0x11,0x1E,0x10,0x10,0x10}, /*  P: ####   */
     ['S']={0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E}, /*  S:  ###   */
+    /* Uppercase A-Z (product HUD) */
+    ['A']={0x0E,0x11,0x11,0x1F,0x11,0x11,0x11}, ['B']={0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E},
+    ['C']={0x0E,0x11,0x10,0x10,0x10,0x11,0x0E}, ['D']={0x1E,0x11,0x11,0x11,0x11,0x11,0x1E},
+    ['E']={0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F}, ['G']={0x0E,0x11,0x10,0x13,0x11,0x11,0x0E},
+    ['H']={0x11,0x11,0x11,0x1F,0x11,0x11,0x11}, ['K']={0x11,0x12,0x14,0x18,0x14,0x12,0x11},
+    ['L']={0x10,0x10,0x10,0x10,0x10,0x10,0x1F}, ['M']={0x11,0x1B,0x15,0x15,0x11,0x11,0x11},
+    ['N']={0x11,0x19,0x15,0x13,0x11,0x11,0x11}, ['O']={0x0E,0x11,0x11,0x11,0x11,0x11,0x0E},
+    ['R']={0x1E,0x11,0x11,0x1E,0x14,0x12,0x11}, ['T']={0x1F,0x04,0x04,0x04,0x04,0x04,0x04},
+    ['U']={0x11,0x11,0x11,0x11,0x11,0x11,0x0E}, ['W']={0x11,0x11,0x11,0x15,0x15,0x1B,0x11},
+    ['Y']={0x11,0x11,0x0A,0x04,0x04,0x04,0x04}, ['V']={0x11,0x11,0x11,0x11,0x0A,0x04,0x04},
+    /* Lowercase extras */
+    ['a']={0x00,0x00,0x0F,0x11,0x0F,0x11,0x0F}, ['d']={0x01,0x01,0x0F,0x11,0x11,0x11,0x0F},
+    ['g']={0x00,0x00,0x0E,0x11,0x0F,0x01,0x0E}, ['i']={0x04,0x00,0x0C,0x04,0x04,0x04,0x0E},
+    ['k']={0x10,0x10,0x12,0x14,0x18,0x14,0x12}, ['l']={0x0C,0x04,0x04,0x04,0x04,0x04,0x0E},
+    ['o']={0x00,0x00,0x0E,0x11,0x11,0x11,0x0E}, ['t']={0x08,0x08,0x1E,0x08,0x08,0x09,0x06},
+    ['w']={0x00,0x00,0x11,0x15,0x15,0x1B,0x11}, ['y']={0x00,0x00,0x11,0x11,0x0F,0x01,0x0E},
+    ['/']={0x01,0x01,0x02,0x04,0x08,0x10,0x10},
 };
 
-/* 检查字符是否在字体表中 */
+/* 检查字符是否有定义 (非零 glyph 即有效, space 除外) */
 static int font_has(char c) {
-    static const char supported[] =
-        "0123456789.:| InfersmFPS";
-    for (const char *p = supported; *p; p++)
-        if (*p == c) return 1;
+    if (c == ' ') return 1;
+    const unsigned char *g = font_5x7[(unsigned char)c];
+    for (int i = 0; i < 7; i++) if (g[i]) return 1;
     return 0;
 }
 
@@ -160,23 +183,82 @@ static void draw_text_bgra(uint8_t *buf, int x, int y, const char *text, uint32_
     }
 }
 
-/* ── HUD 叠加：推理耗时 + FPS (BGRA buffer 像素渲染, 无闪烁) ── */
+/* ── JPEG 截图 (libjpeg) ── */
+static void save_jpeg(const uint8_t *bgr, int w, int h,
+                      const char *path, int quality) {
+    uint8_t *rgb = malloc(w * h * 3);
+    for (int i = 0; i < w * h; i++) {
+        rgb[i*3+0] = bgr[i*3+2];  /* B→R */
+        rgb[i*3+1] = bgr[i*3+1];  /* G */
+        rgb[i*3+2] = bgr[i*3+0];  /* R→B */
+    }
+    FILE *fp = fopen(path, "wb");
+    if (!fp) { free(rgb); return; }
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_compress(&cinfo);
+    jpeg_stdio_dest(&cinfo, fp);
+    cinfo.image_width      = w;
+    cinfo.image_height     = h;
+    cinfo.input_components = 3;
+    cinfo.in_color_space   = JCS_RGB;
+    jpeg_set_defaults(&cinfo);
+    jpeg_set_quality(&cinfo, quality, TRUE);
+    jpeg_start_compress(&cinfo, TRUE);
+    while (cinfo.next_scanline < cinfo.image_height) {
+        JSAMPROW row = (JSAMPROW)(rgb + cinfo.next_scanline * w * 3);
+        jpeg_write_scanlines(&cinfo, &row, 1);
+    }
+    jpeg_finish_compress(&cinfo);
+    jpeg_destroy_compress(&cinfo);
+    fclose(fp);
+    free(rgb);
+}
+
+/* ── 磁盘剩余 MB ── */
+static long get_free_mb(void) {
+    struct statvfs st;
+    if (statvfs(BASE_DIR, &st) < 0) statvfs("/home/cat", &st);
+    return (long)st.f_bavail * st.f_frsize / 1024 / 1024;
+}
+
+/* ── 产品 HUD：状态 + 统计 ── */
 static void draw_hud_bgra(uint8_t *buf, float infer_ms, float fps) {
     char text[64];
-    snprintf(text, sizeof(text), "Infer:%.0fms|FPS:%.1f", infer_ms, fps);
+    time_t now = time(NULL);
+    int cooling = COOLDOWN_SEC - (int)(now - g_last_capture);
+    long free_mb = get_free_mb();
 
-    /* 黑色半透明背景条 (top-right, 240x28) */
-    int bar_x = WIN_W - 244, bar_y = 6;
+    /* 状态行 */
+    int bar_x = WIN_W - 248, bar_y = 6;
     if (bar_x < 0) bar_x = 0;
-    for (int y = bar_y; y < bar_y + 28 && y < WIN_H; y++)
-        for (int x = bar_x; x < bar_x + 244 && x < WIN_W; x++) {
-            int off = (y * WIN_W + x) * 4;
-            buf[off]   = (buf[off]   >> 1) & 0x7F;   /* 50% darken */
-            buf[off+1] = (buf[off+1] >> 1) & 0x7F;
-            buf[off+2] = (buf[off+2] >> 1) & 0x7F;
+    /* 半透明黑底 */
+    for (int y = bar_y; y < bar_y + 52 && y < WIN_H; y++)
+        for (int x = bar_x; x < bar_x + 248 && x < WIN_W; x++) {
+            int o = (y * WIN_W + x) * 4;
+            buf[o] = (buf[o] >> 1) & 0x7F;
+            buf[o+1] = (buf[o+1] >> 1) & 0x7F;
+            buf[o+2] = (buf[o+2] >> 1) & 0x7F;
         }
 
-    draw_text_bgra(buf, bar_x + 4, bar_y + 4, text, 0x00FF00); /* green text */
+    if (cooling > 0) {
+        snprintf(text, sizeof(text), "ALERT! Cool %ds", cooling);
+        draw_text_bgra(buf, bar_x + 4, bar_y + 4, text, 0x0000FF); /* red */
+    } else {
+        draw_text_bgra(buf, bar_x + 4, bar_y + 4, "MONITORING", 0x00FF00); /* green */
+    }
+
+    /* 统计行 */
+    snprintf(text, sizeof(text), "Infer:%.0fms  FPS:%.1f", infer_ms, fps);
+    draw_text_bgra(buf, bar_x + 4, bar_y + 22, text, 0x00AA00);
+    snprintf(text, sizeof(text), "Free:%ldMB", free_mb);
+    draw_text_bgra(buf, bar_x + 180, bar_y + 22, text, 0xAAAAAA);
+
+    /* 第三行: timestamp */
+    struct tm *t = localtime(&now);
+    strftime(text, sizeof(text), "%H:%M:%S", t);
+    draw_text_bgra(buf, bar_x + 4, bar_y + 40, text, 0x888888);
 }
 
 /* ── X11 事件处理 ── */
@@ -187,12 +269,17 @@ static void handle_x11(Display *dpy) {
         if (ev.type == KeyPress) {
             KeySym ks = XLookupKeysym(&ev.xkey, 0);
             if (ks == XK_Escape) g_running = 0;
+            if (ks == XK_h)      g_show_hud = !g_show_hud;
         }
     }
 }
 
 int main(void) {
-    setbuf(stdout, NULL);  /* 禁用缓冲, X 连接断开时 printf 不丢 */
+    setbuf(stdout, NULL);
+    mkdir(BASE_DIR, 0755);
+    mkdir(BASE_DIR "/captures", 0755);
+    printf("Security camera. Dir: " BASE_DIR "\n");
+
     /* ══ 1. GStreamer 初始化 ══ */
     gst_init(NULL, NULL);
     GstElement *pipe = gst_parse_launch(
@@ -239,7 +326,7 @@ int main(void) {
     Window win = XCreateSimpleWindow(dpy, RootWindow(dpy, screen),
                                      50, 0, WIN_W, WIN_H, 1,
                                      BlackPixel(dpy, screen), WhitePixel(dpy, screen));
-    XStoreName(dpy, win, "AI Demo - YOLOv5 Real-time Detection");
+    XStoreName(dpy, win, "AI Security Camera - YOLOv5s");
     XSelectInput(dpy, win, ExposureMask | KeyPressMask);
     XMapWindow(dpy, win);
     GC gc = XCreateGC(dpy, win, 0, NULL);
@@ -254,7 +341,7 @@ int main(void) {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     t_last_ns = ts.tv_sec * 1e9 + ts.tv_nsec;
     float fps_ema = 0.0f, infer_ms = 0.0f;
-    printf("Running... Press ESC to exit.\n");
+    printf("Running... H=toggle HUD  ESC=exit\n");
 
     while (g_running) {
         /* 等新帧 */
@@ -298,10 +385,11 @@ int main(void) {
         Detection dets[MAX_RESULTS];
         int nd = yolov5_post_process(out_data, out_attr, dets);
 
-        /* 画框 */
+        /* 画框 + 抓拍 */
+        int person_seen = 0;
         for (int i = 0; i < nd; i++) {
-            uint32_t color = 0xFF0000; /* 蓝色框 */
-            if (dets[i].cls == 0) color = 0x00FF00; /* person → 绿色 */
+            uint32_t color = 0xFF0000;
+            if (dets[i].cls == 0) { color = 0x00FF00; person_seen = 1; }
             char label[64];
             snprintf(label, sizeof(label), "%s %.2f",
                      (dets[i].cls < 80) ? coco_names[dets[i].cls] : "?", dets[i].score);
@@ -309,6 +397,26 @@ int main(void) {
                      (int)dets[i].box.x1, (int)dets[i].box.y1,
                      (int)dets[i].box.x2, (int)dets[i].box.y2,
                      label, color);
+        }
+
+        /* 抓拍: 冷却期内不重复 */
+        if (person_seen) {
+            time_t now = time(NULL);
+            if (now - g_last_capture >= COOLDOWN_SEC) {
+                g_last_capture = now;
+                char path[256];
+                struct tm *t = localtime(&now);
+                snprintf(path, sizeof(path), BASE_DIR "/captures/%04d-%02d-%02d_%02d%02d%02d_person.jpg",
+                         1900+t->tm_year, t->tm_mon+1, t->tm_mday,
+                         t->tm_hour, t->tm_min, t->tm_sec);
+                save_jpeg(g_frame, WIN_W, WIN_H, path, 85);
+                FILE *log = fopen(BASE_DIR "/events.log", "a");
+                if (log) {
+                    fprintf(log, "%s conf=%.2f\n", path, dets[0].score);
+                    fclose(log);
+                }
+                printf("CAPTURE: %s\n", path);
+            }
         }
 
         /* FPS (EMA 平滑) */
@@ -327,8 +435,9 @@ int main(void) {
             disp_buf[i*4+3] = 0;
         }
 
-        /* HUD 叠加到 BGRA buffer (画在图像内部, 无闪烁) */
-        draw_hud_bgra(disp_buf, infer_ms, fps_ema);
+        /* HUD 叠加 (H 键切换) */
+        if (g_show_hud)
+            draw_hud_bgra(disp_buf, infer_ms, fps_ema);
 
         /* 显示 */
         XPutImage(dpy, win, gc, ximg, 0, 0, 0, 0, WIN_W, WIN_H);
@@ -339,7 +448,7 @@ int main(void) {
     }
 
     /* ══ 5. 清理 ══ */
-    printf("Frames: %d. Last infer: %.1fms, FPS: %.1f. Shutting down...\n",
+    printf("Frames: %d, infer: %.1fms, FPS: %.1f. Shutting down...\n",
            frame_count, infer_ms, fps_ema);
     XDestroyImage(ximg); /* ximg owns disp_buf */
     XFreeGC(dpy, gc); XDestroyWindow(dpy, win); XCloseDisplay(dpy);
