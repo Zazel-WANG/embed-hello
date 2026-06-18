@@ -197,8 +197,7 @@ int main(void) {
     gst_init(NULL, NULL);
     GstElement *pipe = gst_parse_launch(
         "v4l2src device=/dev/video-camera0 ! "
-        "video/x-raw,format=NV12,width=3840,height=2160 ! "
-        "videoscale ! video/x-raw,width=640,height=640 ! "
+        "video/x-raw,format=NV12,width=640,height=640 ! "
         "videoconvert ! video/x-raw,format=BGR ! "
         "appsink name=sink emit-signals=true sync=false", NULL);
     if (!pipe) { fprintf(stderr, "GStreamer pipeline failed\n"); return 1; }
@@ -213,7 +212,7 @@ int main(void) {
     printf("Camera ready.\n");
 
     /* ══ 2. 加载 YOLOv5s 模型 ══ */
-    const char *model_path = "/home/cat/ai-demo/yolov5s-640-640.rknn";
+    const char *model_path = "/home/cat/models/yolov5s-640-640.rknn";
     FILE *fp = fopen(model_path, "rb");
     if (!fp) { perror(model_path); return 1; }
     fseek(fp, 0, SEEK_END); long msize = ftell(fp); fseek(fp, 0, SEEK_SET);
