@@ -1,5 +1,5 @@
 /*
- * 花架子 Phase 2 Step 6 — 全链路整合 — YOLOv5s + HUD 实时检测
+ * 花架子 Phase 2 Step 6 — 全链路整合 — YOLOv5s NPU + HUD 实时检测
  *
  * GStreamer(v4l2src→640×640 BGR) → NPU(YOLOv5s) → 后处理(NMS) → 画框 → X11 显示
  * 按 ESC 退出
