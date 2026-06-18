@@ -55,7 +55,7 @@ AI_SYSROOT := /usr/aarch64-linux-gnu
 GST_INC := $(AI_SYSROOT)/include/gstreamer-1.0
 GLIB_INC := $(AI_SYSROOT)/include/glib-2.0
 
-AI_CFLAGS := -Wall -O2 \
+AI_CFLAGS := -Wall -O2 -static \
 	-I$(AI_INC_DIR) \
 	-I$(GST_INC) \
 	-I$(GLIB_INC)
