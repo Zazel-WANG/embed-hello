@@ -90,6 +90,13 @@ ssh "$BOARD" "cd /usr/lib/aarch64-linux-gnu && tar chf - \
 
 echo "  共享库复制完成"
 
+# ---- 2.5: 从板子复制 crt 启动文件（确保 glibc 版本匹配） ----
+echo "[2.5/4] 复制 crt 启动文件..."
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crt1.o" "$LIB_DIR/"
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crti.o" "$LIB_DIR/"
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crtn.o" "$LIB_DIR/"
+echo "  crt 文件复制完成"
+
 # ---- 3: 从本地 rknpu2 SDK 复制 RKNN 文件 ----
 echo "[3/4] 复制 RKNN 头文件和库..."
 
@@ -129,6 +136,11 @@ check_lib "$LIB_DIR/libX11.so"
 check_lib "$LIB_DIR/libxcb.so"
 check_lib "$LIB_DIR/librknnrt.so"
 check_lib "$LIB_DIR/libjpeg.so"
+
+echo "-- crt 启动文件 (glibc 版本对齐) --"
+check_lib "$LIB_DIR/crt1.o"
+check_lib "$LIB_DIR/crti.o"
+check_lib "$LIB_DIR/crtn.o"
 
 echo ""
 echo "=== sysroot 就绪: $SYSROOT ==="
