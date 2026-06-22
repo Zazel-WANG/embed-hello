@@ -48,7 +48,8 @@ int main(void) {
     char pipe_str[512];
     snprintf(pipe_str, sizeof(pipe_str),
         "v4l2src device=/dev/video-camera0 ! "
-        "video/x-raw,format=NV12,width=%d,height=%d ! "
+        "video/x-raw,format=NV12,width=3840,height=2160 ! "
+        "videoscale ! video/x-raw,width=%d,height=%d ! "
         "videoconvert ! video/x-raw,format=BGR ! "
         "appsink name=sink emit-signals=true sync=false",
         WIDTH, HEIGHT);

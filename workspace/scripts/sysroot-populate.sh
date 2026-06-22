@@ -23,6 +23,10 @@ echo "[1/4] 复制头文件..."
 scp -r -q "$BOARD:/usr/include/gstreamer-1.0" "$INCLUDE_DIR/"
 scp -r -q "$BOARD:/usr/include/glib-2.0"       "$INCLUDE_DIR/"
 scp -r -q "$BOARD:/usr/include/X11"            "$INCLUDE_DIR/"
+scp -q "$BOARD:/usr/include/jpeglib.h"         "$INCLUDE_DIR/"
+scp -q "$BOARD:/usr/include/aarch64-linux-gnu/jconfig.h" "$INCLUDE_DIR/"
+scp -q "$BOARD:/usr/include/jerror.h"          "$INCLUDE_DIR/"
+scp -q "$BOARD:/usr/include/jmorecfg.h"        "$INCLUDE_DIR/"
 
 # glibconfig.h 不在 /usr/include，需要单独处理
 mkdir -p "$INCLUDE_DIR/glib-2.0"
@@ -78,12 +82,20 @@ ssh "$BOARD" "cd /usr/lib/aarch64-linux-gnu && tar chf - \
     libGL.so* \
     libdrm.so* \
     libfreetype.so* \
+    libjpeg.so* \
     libpng16.so* \
     libbrotlidec.so* \
     libbrotlicommon.so* \
     2>/dev/null" | tar xf - -C "$LIB_DIR"
 
 echo "  共享库复制完成"
+
+# ---- 2.5: 从板子复制 crt 启动文件（确保 glibc 版本匹配） ----
+echo "[2.5/4] 复制 crt 启动文件..."
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crt1.o" "$LIB_DIR/"
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crti.o" "$LIB_DIR/"
+scp -q "$BOARD:/usr/lib/aarch64-linux-gnu/crtn.o" "$LIB_DIR/"
+echo "  crt 文件复制完成"
 
 # ---- 3: 从本地 rknpu2 SDK 复制 RKNN 文件 ----
 echo "[3/4] 复制 RKNN 头文件和库..."
@@ -114,6 +126,7 @@ check_header "$INCLUDE_DIR/X11/Xlib.h"
 check_header "$INCLUDE_DIR/X11/Xutil.h"
 check_header "$INCLUDE_DIR/X11/keysym.h"
 check_header "$INCLUDE_DIR/rknn_api.h"
+check_header "$INCLUDE_DIR/jpeglib.h"
 
 echo "-- 关键共享库 --"
 check_lib "$LIB_DIR/libgstreamer-1.0.so"
@@ -122,6 +135,12 @@ check_lib "$LIB_DIR/libgobject-2.0.so"
 check_lib "$LIB_DIR/libX11.so"
 check_lib "$LIB_DIR/libxcb.so"
 check_lib "$LIB_DIR/librknnrt.so"
+check_lib "$LIB_DIR/libjpeg.so"
+
+echo "-- crt 启动文件 (glibc 版本对齐) --"
+check_lib "$LIB_DIR/crt1.o"
+check_lib "$LIB_DIR/crti.o"
+check_lib "$LIB_DIR/crtn.o"
 
 echo ""
 echo "=== sysroot 就绪: $SYSROOT ==="
