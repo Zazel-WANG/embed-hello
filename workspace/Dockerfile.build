@@ -1,6 +1,6 @@
 # embed-hello AI 交叉编译环境
 # 用法: docker build -t embed-hello-builder:latest -f Dockerfile.build ..
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
